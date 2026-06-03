@@ -2,8 +2,15 @@ import cors from 'cors'
 import express from 'express'
 import morgan from 'morgan'
 import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.PORT || 8787)
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const clientDistPath = path.resolve(__dirname, '../dist')
+const clientIndexPath = path.join(clientDistPath, 'index.html')
 
 const domains = [
   { id: 'physical', label: 'Physical', short: 'Motor' },
@@ -386,6 +393,22 @@ app.post('/api/sync', (req, res) => {
   })
 })
 
+if (existsSync(clientIndexPath)) {
+  app.use(express.static(clientDistPath))
+
+  app.get(/^(?!\/api\/).*/, (req, res) => {
+    res.sendFile(clientIndexPath)
+  })
+} else {
+  app.get('/', (req, res) => {
+    res.status(200).json({
+      service: 'ankur-api',
+      status: 'frontend build missing',
+      fix: 'Run npm run build before npm start, or use npm start to build and serve in production.',
+    })
+  })
+}
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
@@ -399,6 +422,11 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'ANKUR API error', detail: error.message })
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`ANKUR API listening on http://localhost:${PORT}`)
+})
+
+server.on('error', (error) => {
+  console.error('ANKUR API failed to start:', error)
+  process.exitCode = 1
 })
